@@ -12,6 +12,7 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from authlib.integrations.flask_client import OAuth
 from datetime import datetime
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
@@ -20,6 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key")
 CORS(app, supports_credentials=True) # Ensure credentials can be sent
 
@@ -146,7 +148,7 @@ def authorize():
         return redirect(os.getenv("FRONTEND_URL", "/dashboard"))
     except Exception as e:
         logger.error(f"Auth failed: {e}")
-        return jsonify({"error": "Authentication failed"}), 400
+        return jsonify({"error": str(e)}), 400
 
 @app.route('/api/auth/logout')
 @login_required
