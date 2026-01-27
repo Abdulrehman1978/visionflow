@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 import os
 from google import genai
@@ -7,13 +7,74 @@ from youtube_search import YoutubeSearch
 import json
 import logging
 import time
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from authlib.integrations.flask_client import OAuth
+from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)
+app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key")
+CORS(app, supports_credentials=True) # Ensure credentials can be sent
+
+# --- DATABASE CONFIGURATION ---
+database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    # Fallback to local SQLite
+    database_url = "sqlite:///visionflow.db"
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db = SQLAlchemy(app)
+
+# --- MODELS ---
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    google_id = db.Column(db.String(100), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=True)
+    avatar = db.Column(db.String(200), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class UserProgress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    topic_id = db.Column(db.String(200), nullable=False) # e.g., "Python_Basics_Variables"
+    is_completed = db.Column(db.Boolean, default=False)
+    timestamp = db.Column(db.String(50), nullable=True) # Last watched timestamp in video
+    last_watched = db.Column(db.DateTime, default=datetime.utcnow)
+
+# Initialize DB
+with app.app_context():
+    db.create_all()
+
+# --- AUTH CONFIGURATION ---
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.getenv("GOOGLE_CLIENT_ID"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+    access_token_url='https://oauth2.googleapis.com/token',
+    access_token_params=None,
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    authorize_params=None,
+    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',  # This is only needed if using openId fetch
+    client_kwargs={'scope': 'openid email profile'},
+)
 
 # --- MOCK DATA ---
 MOCK_SYLLABUS = {
@@ -54,6 +115,94 @@ if GEMINI_API_KEY:
         client = genai.Client(api_key=GEMINI_API_KEY)
     except Exception as e:
         logger.error(f"Failed to initialize Gemini client: {e}")
+
+# --- AUTH ROUTES ---
+@app.route('/api/auth/login')
+def login():
+    redirect_uri = url_for('authorize', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/api/auth/callback')
+def authorize():
+    try:
+        token = google.authorize_access_token()
+        resp = google.get('userinfo')
+        user_info = resp.json()
+        
+        # Check if user exists
+        user = User.query.filter_by(google_id=user_info['id']).first()
+        if not user:
+            user = User(
+                google_id=user_info['id'], 
+                email=user_info['email'],
+                name=user_info.get('name'),
+                avatar=user_info.get('picture')
+            )
+            db.session.add(user)
+            db.session.commit()
+        
+        login_user(user)
+        # Redirect to frontend dashboard
+        return redirect(os.getenv("FRONTEND_URL", "/dashboard"))
+    except Exception as e:
+        logger.error(f"Auth failed: {e}")
+        return jsonify({"error": "Authentication failed"}), 400
+
+@app.route('/api/auth/logout')
+@login_required
+def logout():
+    logout_user()
+    return jsonify({"message": "Logged out successfully"})
+
+@app.route('/api/auth/me')
+def current_user_info():
+    if current_user.is_authenticated:
+        return jsonify({
+            "id": current_user.id,
+            "name": current_user.name,
+            "email": current_user.email,
+            "avatar": current_user.avatar
+        })
+    return jsonify(None), 401
+
+# --- PROGRESS ROUTES ---
+@app.route('/api/progress/update', methods=['POST'])
+@login_required
+def update_progress():
+    data = request.json
+    topic_id = data.get('topic_id')
+    is_completed = data.get('is_completed', False)
+    timestamp = data.get('timestamp')
+    
+    if not topic_id:
+        return jsonify({"error": "Topic ID required"}), 400
+
+    progress = UserProgress.query.filter_by(user_id=current_user.id, topic_id=topic_id).first()
+    
+    if progress:
+        progress.is_completed = is_completed
+        progress.timestamp = timestamp
+        progress.last_watched = datetime.utcnow()
+    else:
+        progress = UserProgress(
+            user_id=current_user.id,
+            topic_id=topic_id,
+            is_completed=is_completed,
+            timestamp=timestamp
+        )
+        db.session.add(progress)
+    
+    db.session.commit()
+    return jsonify({"message": "Progress updated"})
+
+@app.route('/api/progress', methods=['GET'])
+@login_required
+def get_progress():
+    # Return list of completed topic IDs
+    completed_progress = UserProgress.query.filter_by(user_id=current_user.id, is_completed=True).all()
+    completed_ids = [p.topic_id for p in completed_progress]
+    return jsonify(completed_ids)
+
 
 @app.route('/api/syllabus', methods=['GET'])
 def get_syllabus():

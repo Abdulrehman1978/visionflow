@@ -1,25 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Play, Layout, Settings, Search, ChevronRight, GraduationCap, Video, CheckCircle, Clock } from 'lucide-react';
+import { BookOpen, Play, Layout, Settings, Search, ChevronRight, GraduationCap, Video, CheckCircle, Clock, LogIn, LogOut } from 'lucide-react';
 import VideoPlayer from './VideoPlayer';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useAuth } from '../context/AuthContext';
 
 function cn(...inputs) {
     return twMerge(clsx(inputs));
 }
 
 export default function Dashboard() {
+    const { user, login, logout, loading } = useAuth();
     const [activeTab, setActiveTab] = useState('dashboard');
     const [selectedLanguage, setSelectedLanguage] = useState(null);
     const [syllabus, setSyllabus] = useState([]);
     const [selectedTopic, setSelectedTopic] = useState(null);
     const [loadingSyllabus, setLoadingSyllabus] = useState(false);
+    const [completedTopics, setCompletedTopics] = useState([]);
 
     const courses = [
         { id: 'python', name: 'Python', color: 'bg-yellow-500', progress: 0 },
         { id: 'java', name: 'Java', color: 'bg-orange-600', progress: 0 },
         { id: 'cpp', name: 'C++', color: 'bg-blue-600', progress: 0 },
     ];
+
+    useEffect(() => {
+        if (user) {
+            fetch('/api/progress')
+                .then(res => res.json())
+                .then(data => setCompletedTopics(data))
+                .catch(console.error);
+        }
+    }, [user]);
 
     const handleCourseSelect = async (courseId) => {
         setSelectedLanguage(courseId);
@@ -32,10 +44,6 @@ export default function Dashboard() {
             const response = await fetch('/api/syllabus?language=' + courseId);
             const data = await response.json();
             if (data.modules) {
-                // Flatten modules to topics for the timeline list provided in the prompt's simplicity,
-                // but the prompt asked to flatten generated topics.
-                // The backend now returns structured modules. I should probably adapt the timeline to display modules or just flatten them.
-                // For now, I'll flatten them to simple list as the UI expects a list of topics.
                 const allTopics = data.modules.flatMap(m => m.topics.map(t => t.name));
                 setSyllabus(allTopics);
             } else if (data.topics) {
@@ -51,6 +59,8 @@ export default function Dashboard() {
     const handleTopicSelect = (topic) => {
         setSelectedTopic(topic);
     };
+
+    if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
 
     return (
         <div className="flex h-screen bg-background text-gray-100 overflow-hidden">
@@ -72,19 +82,28 @@ export default function Dashboard() {
                 </nav>
 
                 <div className="p-4 border-t border-gray-800">
-                    <div className="bg-gray-800/50 rounded-xl p-4">
-                        <div className="flex items-center space-x-3 mb-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-purple-500" />
-                            <div>
-                                <p className="font-medium text-sm">Student</p>
-                                <p className="text-xs text-gray-400">Pro Plan</p>
+                    {user ? (
+                        <div className="bg-gray-800/50 rounded-xl p-4">
+                            <div className="flex items-center space-x-3 mb-3">
+                                {user.avatar ? (
+                                    <img src={user.avatar} className="w-10 h-10 rounded-full" alt="Avatar" />
+                                ) : (
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-purple-500" />
+                                )}
+                                <div className="overflow-hidden">
+                                    <p className="font-medium text-sm truncate">{user.name}</p>
+                                    <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                                </div>
                             </div>
+                            <button onClick={logout} className="w-full mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1 justify-center">
+                                <LogOut size={12} /> Logout
+                            </button>
                         </div>
-                        <div className="h-1.5 w-full bg-gray-700 rounded-full overflow-hidden">
-                            <div className="h-full bg-primary w-[75%]" />
-                        </div>
-                        <p className="text-xs text-gray-400 mt-2 text-right">75% Complete</p>
-                    </div>
+                    ) : (
+                        <button onClick={login} className="w-full bg-primary hover:bg-primary/90 text-white rounded-lg py-2 flex items-center justify-center gap-2">
+                            <LogIn size={16} /> Login with Google
+                        </button>
+                    )}
                 </div>
             </aside>
 
@@ -94,18 +113,25 @@ export default function Dashboard() {
                     <div className="max-w-5xl mx-auto space-y-8">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h1 className="text-3xl font-bold">Welcome back!</h1>
+                                <h1 className="text-3xl font-bold">Welcome back{user ? `, ${user.name.split(' ')[0]}` : '!'}</h1>
                                 <p className="text-gray-400 mt-1">Ready to continue learning?</p>
                             </div>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Search courses..."
-                                    className="bg-surface pl-10 pr-4 py-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 w-64 border border-gray-800"
-                                />
-                            </div>
                         </div>
+
+                        {/* Recent Progress Section */}
+                        {user && completedTopics.length > 0 && (
+                            <div className="bg-surface p-6 rounded-2xl border border-gray-800">
+                                <h3 className="text-xl font-bold mb-4">My Progress</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {completedTopics.slice(0, 5).map(topic => (
+                                        <span key={topic} className="px-3 py-1 bg-green-500/10 text-green-500 border border-green-500/20 rounded-full text-sm">
+                                            {topic}
+                                        </span>
+                                    ))}
+                                    {completedTopics.length > 5 && <span className="text-gray-400 text-sm mt-1">+{completedTopics.length - 5} more</span>}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {courses.map((course) => (
@@ -120,11 +146,8 @@ export default function Dashboard() {
                                     <h3 className="text-xl font-bold mb-1 group-hover:text-primary transition-colors">{course.name}</h3>
                                     <p className="text-sm text-gray-400 mb-4">Master {course.name} from scratch</p>
                                     <div className="flex items-center justify-between text-xs text-gray-400">
-                                        <span>{course.progress}% Completed</span>
+                                        <span>Start Learning</span>
                                         <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                    </div>
-                                    <div className="mt-3 h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
-                                        <div className="h-full bg-primary" style={{ width: `${course.progress}%` }} />
                                     </div>
                                 </div>
                             ))}
@@ -146,26 +169,29 @@ export default function Dashboard() {
                                 {loadingSyllabus ? (
                                     <div className="text-center text-gray-400 py-10 animate-pulse">Generating syllabus...</div>
                                 ) : syllabus.length > 0 ? (
-                                    syllabus.map((topic, index) => (
-                                        <div
-                                            key={index}
-                                            onClick={() => handleTopicSelect(topic)}
-                                            className={cn(
-                                                "p-4 rounded-xl border border-gray-800 cursor-pointer transition-all hover:bg-gray-800 relative pl-10",
-                                                selectedTopic === topic ? "bg-primary/10 border-primary/50" : "bg-gray-900/40"
-                                            )}
-                                        >
-                                            <div className={cn(
-                                                "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 flex items-center justify-center",
-                                                selectedTopic === topic ? "border-primary" : "border-gray-600"
-                                            )}>
-                                                {selectedTopic === topic && <div className="w-2 h-2 rounded-full bg-primary" />}
+                                    syllabus.map((topic, index) => {
+                                        const isCompleted = completedTopics.includes(topic);
+                                        return (
+                                            <div
+                                                key={index}
+                                                onClick={() => handleTopicSelect(topic)}
+                                                className={cn(
+                                                    "p-4 rounded-xl border border-gray-800 cursor-pointer transition-all hover:bg-gray-800 relative pl-10",
+                                                    selectedTopic === topic ? "bg-primary/10 border-primary/50" : "bg-gray-900/40"
+                                                )}
+                                            >
+                                                <div className={cn(
+                                                    "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                                                    isCompleted ? "border-green-500" : selectedTopic === topic ? "border-primary" : "border-gray-600"
+                                                )}>
+                                                    {isCompleted ? <div className="w-2 h-2 rounded-full bg-green-500" /> : selectedTopic === topic && <div className="w-2 h-2 rounded-full bg-primary" />}
+                                                </div>
+                                                <p className={cn("text-sm font-medium", selectedTopic === topic ? "text-primary" : isCompleted ? "text-green-500" : "text-gray-300")}>
+                                                    {topic}
+                                                </p>
                                             </div>
-                                            <p className={cn("text-sm font-medium", selectedTopic === topic ? "text-primary" : "text-gray-300")}>
-                                                {topic}
-                                            </p>
-                                        </div>
-                                    ))
+                                        )
+                                    })
                                 ) : (
                                     <p className="text-center text-gray-500 text-sm">Select a course to view syllabus</p>
                                 )}
@@ -174,13 +200,22 @@ export default function Dashboard() {
 
                         {/* Video Player & Content */}
                         <div className="flex-1 bg-surface rounded-2xl border border-gray-800 overflow-hidden flex flex-col">
-                            <VideoPlayer topic={selectedTopic} />
+                            <VideoPlayer topic={selectedTopic} onProgressUpdate={() => user && fetch('/api/progress').then(res => res.json()).then(setCompletedTopics)} />
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'settings' && (
-                    <div className="flex items-center justify-center h-full text-gray-500">Settings Page</div>
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                        <div className="text-center space-y-4">
+                            <h2 className="text-2xl font-bold">Settings</h2>
+                            <p>Manage your account settings</p>
+                            <div className="flex gap-4 justify-center">
+                                <button className="px-4 py-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 border border-red-500/20">Delete Account</button>
+                                <button className="px-4 py-2 bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20 border border-blue-500/20">Export Data</button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </main>
         </div>

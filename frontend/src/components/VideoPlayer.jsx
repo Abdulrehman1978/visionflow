@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useAuth } from '../context/AuthContext';
 
 function cn(...inputs) {
     return twMerge(clsx(inputs));
@@ -13,7 +14,8 @@ const MOCK_VIDEOS = [
     { id: 'rfscVS0vtbw', title: 'Learn Python - Full Course for Beginners [Tutorial]', thumbnail: 'https://img.youtube.com/vi/rfscVS0vtbw/mqdefault.jpg', score: 8 },
 ];
 
-export default function VideoPlayer({ topic }) {
+export default function VideoPlayer({ topic, onProgressUpdate }) {
+    const { user } = useAuth();
     const [videos, setVideos] = useState([]);
     const [activeVideo, setActiveVideo] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -27,6 +29,19 @@ export default function VideoPlayer({ topic }) {
             setVideos([]);
             setActiveVideo(null);
             setCompleted(false);
+
+            // Check completion status via API if user is logged in
+            if (user) {
+                fetch('/api/progress')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.includes(topic)) {
+                            setCompleted(true);
+                        }
+                    })
+                    .catch(console.error)
+            }
+
 
             try {
                 const response = await fetch(`/api/videos?topic=${encodeURIComponent(topic)}`);
@@ -50,7 +65,35 @@ export default function VideoPlayer({ topic }) {
         };
 
         fetchVideos();
-    }, [topic]);
+    }, [topic, user]);
+
+    const handleMarkCompleted = async () => {
+        if (!user) {
+            alert("Please login to save progress");
+            return;
+        }
+
+        const newCompletedState = !completed;
+        setCompleted(newCompletedState);
+
+        try {
+            const res = await fetch('/api/progress/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    topic_id: topic,
+                    is_completed: newCompletedState,
+                    timestamp: '00:00' // Placeholder
+                })
+            });
+            if (res.ok && onProgressUpdate) {
+                onProgressUpdate();
+            }
+        } catch (error) {
+            console.error("Failed to update progress:", error);
+            setCompleted(!newCompletedState); // Revert on error
+        }
+    };
 
     if (!topic) {
         return (
@@ -99,7 +142,7 @@ export default function VideoPlayer({ topic }) {
                         </div>
                     </div>
                     <button
-                        onClick={() => setCompleted(!completed)}
+                        onClick={handleMarkCompleted}
                         className={cn(
                             "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
                             completed
