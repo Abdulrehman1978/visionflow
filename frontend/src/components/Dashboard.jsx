@@ -18,13 +18,25 @@ export default function Dashboard() {
     const [loadingSyllabus, setLoadingSyllabus] = useState(false);
     const [completedTopics, setCompletedTopics] = useState([]);
 
-    const courses = [
-        { id: 'python', name: 'Python', color: 'bg-yellow-500', progress: 0 },
-        { id: 'java', name: 'Java', color: 'bg-orange-600', progress: 0 },
-        { id: 'cpp', name: 'C++', color: 'bg-blue-600', progress: 0 },
-    ];
+    const [courses, setCourses] = useState([]);
 
     useEffect(() => {
+        // Fetch Courses
+        fetch('/api/courses')
+            .then(res => res.json())
+            .then(data => {
+                // Add color mapping for UI since backend doesn't store it yet? Or just cycle colors.
+                // For now let's map known IDs or random colors
+                const colors = ['bg-yellow-500', 'bg-orange-600', 'bg-blue-600', 'bg-green-600', 'bg-purple-600'];
+                const coursesWithUI = data.map((c, i) => ({
+                    ...c,
+                    color: colors[i % colors.length],
+                    name: c.title // Mapping title to name for existing UI
+                }));
+                setCourses(coursesWithUI);
+            })
+            .catch(console.error);
+
         if (user) {
             fetch('/api/progress')
                 .then(res => res.json())
@@ -41,14 +53,30 @@ export default function Dashboard() {
 
         setLoadingSyllabus(true);
         try {
-            const response = await fetch('/api/syllabus?language=' + courseId);
+            // New Endpoint: /api/courses/<id>
+            const response = await fetch('/api/courses/' + courseId);
             const data = await response.json();
+
+            // Transform backend structure to flat syllabus for now if that's what UI expects, 
+            // OR render modules properly.
+            // The existing UI expects `syllabus` to be an array of strings (topics).
+            // But we want to support modules now. 
+            // Let's flatten it for the sidebar list OR update sidebar to show modules.
+            // Task 4 says "Update Dashboard.jsx to fetch from /api/courses". 
+            // It didn't explicitly ask for Module UI redesign but "Returns full syllabus (Modules -> Lessons)".
+            // Let's try to flatten it to keep UI simple for now, but include module headers if possible?
+            // Actually, the previous implementation handled `data.modules` or `data.topics`.
+            // Let's assume we pass the modules object and update the rendering logic if needed.
+
             if (data.modules) {
+                // Flat list for the sidebar: Module 1 -> Topic A, Topic B...
+                // Let's just flatten all lessons for the simple sidebar we saw
                 const allTopics = data.modules.flatMap(m => m.topics.map(t => t.name));
                 setSyllabus(allTopics);
-            } else if (data.topics) {
-                setSyllabus(data.topics);
+            } else {
+                setSyllabus([]);
             }
+
         } catch (error) {
             console.error("Failed to fetch syllabus", error);
         } finally {
