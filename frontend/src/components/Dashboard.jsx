@@ -19,9 +19,11 @@ export default function Dashboard() {
     const [completedTopics, setCompletedTopics] = useState([]);
 
     const [courses, setCourses] = useState([]);
+    const [loadingCourses, setLoadingCourses] = useState(true);
 
     useEffect(() => {
         // Fetch Courses
+        setLoadingCourses(true);
         fetch('/api/courses')
             .then(res => res.json())
             .then(data => {
@@ -35,7 +37,8 @@ export default function Dashboard() {
                 }));
                 setCourses(coursesWithUI);
             })
-            .catch(console.error);
+            .catch(console.error)
+            .finally(() => setLoadingCourses(false));
 
         if (user) {
             fetch('/api/progress')
@@ -162,23 +165,39 @@ export default function Dashboard() {
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {courses.map((course) => (
-                                <div
-                                    key={course.id}
-                                    onClick={() => handleCourseSelect(course.id)}
-                                    className="bg-surface p-6 rounded-2xl border border-gray-800 hover:border-primary/50 transition-all cursor-pointer group"
-                                >
-                                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-4 text-white font-bold text-xl", course.color)}>
-                                        {course.name[0]}
-                                    </div>
-                                    <h3 className="text-xl font-bold mb-1 group-hover:text-primary transition-colors">{course.name}</h3>
-                                    <p className="text-sm text-gray-400 mb-4">Master {course.name} from scratch</p>
-                                    <div className="flex items-center justify-between text-xs text-gray-400">
-                                        <span>Start Learning</span>
-                                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                    </div>
+                            {loadingCourses ? (
+                                <div className="col-span-3 text-center text-gray-400 py-10">
+                                    Loading courses...
                                 </div>
-                            ))}
+                            ) : courses.length === 0 ? (
+                                <div className="col-span-3 text-center text-gray-400 py-10">
+                                    <p className="mb-4">No courses available. Seed the database first!</p>
+                                    <a href="/api/seed_db" target="_blank" className="text-primary hover:underline">Click here to seed database</a>
+                                </div>
+                            ) : (
+                                courses.map((course) => (
+                                    <div
+                                        key={course.id}
+                                        onClick={() => handleCourseSelect(course.id)}
+                                        className="bg-surface p-6 rounded-2xl border border-gray-800 hover:border-primary/50 transition-all cursor-pointer group"
+                                    >
+                                        <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-4 text-white font-bold text-xl", course.color)}>
+                                            {course.name[0]}
+                                        </div>
+                                        <h3 className="text-xl font-bold mb-1 group-hover:text-primary transition-colors">{course.name}</h3>
+                                        <p className="text-sm text-gray-400 mb-2">{course.description || `Master ${course.name} from scratch`}</p>
+                                        {course.level && (
+                                            <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded-full border border-primary/20 mb-3">
+                                                {course.level}
+                                            </span>
+                                        )}
+                                        <div className="flex items-center justify-between text-xs text-gray-400 mt-4">
+                                            <span>Start Learning</span>
+                                            <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 )}
