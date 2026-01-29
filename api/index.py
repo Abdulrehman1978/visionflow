@@ -334,6 +334,53 @@ def get_course_progress(course_id):
     
     return jsonify(list(completed_names))
 
+@app.route('/api/lessons/<int:lesson_id>', methods=['GET'])
+def get_lesson_detail(lesson_id):
+    """Get lesson details including video URL and next lesson ID"""
+    lesson = Lesson.query.get(lesson_id)
+    if not lesson:
+        return jsonify({"error": "Lesson not found"}), 404
+    
+    # Get the module this lesson belongs to
+    module = Module.query.get(lesson.module_id)
+    if not module:
+        return jsonify({"error": "Module not found"}), 404
+    
+    # Find the next lesson
+    next_lesson_id = None
+    
+    # First, try to find next lesson in same module
+    next_in_module = Lesson.query.filter(
+        Lesson.module_id == lesson.module_id,
+        Lesson.order_index > lesson.order_index
+    ).order_by(Lesson.order_index.asc()).first()
+    
+    if next_in_module:
+        next_lesson_id = next_in_module.id
+    else:
+        # Look for first lesson in next module
+        next_module = Module.query.filter(
+            Module.course_id == module.course_id,
+            Module.order_index > module.order_index
+        ).order_by(Module.order_index.asc()).first()
+        
+        if next_module:
+            first_lesson_next_module = Lesson.query.filter(
+                Lesson.module_id == next_module.id
+            ).order_by(Lesson.order_index.asc()).first()
+            if first_lesson_next_module:
+                next_lesson_id = first_lesson_next_module.id
+    
+    return jsonify({
+        "id": lesson.id,
+        "title": lesson.title,
+        "video_url": lesson.video_url,
+        "duration": lesson.duration,
+        "module_title": module.title,
+        "course_id": module.course_id,
+        "next_lesson_id": next_lesson_id
+    })
+
 @app.route('/api/videos', methods=['GET'])
 def get_videos():
     topic = request.args.get('topic')

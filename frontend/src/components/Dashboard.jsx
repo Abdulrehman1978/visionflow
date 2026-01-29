@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { BookOpen, Play, Layout, Settings, Search, ChevronRight, GraduationCap, Video, CheckCircle, Clock, LogIn, LogOut } from 'lucide-react';
 import VideoPlayer from './VideoPlayer';
 import { clsx } from 'clsx';
@@ -176,10 +177,10 @@ export default function Dashboard() {
                                 </div>
                             ) : (
                                 courses.map((course) => (
-                                    <div
+                                    <Link
                                         key={course.id}
-                                        onClick={() => handleCourseSelect(course.id)}
-                                        className="bg-surface p-6 rounded-2xl border border-gray-800 hover:border-primary/50 transition-all cursor-pointer group"
+                                        to={`/course/${course.id}`}
+                                        className="bg-surface p-6 rounded-2xl border border-gray-800 hover:border-primary/50 transition-all cursor-pointer group block"
                                     >
                                         <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-4 text-white font-bold text-xl", course.color)}>
                                             {course.name[0]}
@@ -195,7 +196,7 @@ export default function Dashboard() {
                                             <span>Start Learning</span>
                                             <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                         </div>
-                                    </div>
+                                    </Link>
                                 ))
                             )}
                         </div>
