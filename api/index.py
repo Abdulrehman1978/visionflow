@@ -277,13 +277,14 @@ def get_syllabus():
 
 @app.route('/api/courses', methods=['GET'])
 def get_courses():
-    courses = Course.query.filter_by(is_generated=False).all() # Fetch pre-built courses
+    courses = Course.query.all()  # Fetch all courses including AI-generated
     return jsonify([{
         "id": c.id,
         "title": c.title,
         "description": c.description,
         "thumbnail": c.thumbnail_url,
-        "level": c.level
+        "level": c.level,
+        "is_generated": c.is_generated
     } for c in courses])
 
 @app.route('/api/courses/<course_id>', methods=['GET'])
@@ -414,6 +415,46 @@ def get_videos():
         } for v in results]
     
     return jsonify(scored_videos)
+
+@app.route('/api/generate', methods=['POST'])
+def generate_course_api():
+    """
+    Generate an AI course for a given topic.
+    
+    Request body: { "topic": "Rust Programming" }
+    Response: { "course_id": "rust_programming", "message": "Course generated!" }
+    """
+    try:
+        data = request.json
+        if not data or 'topic' not in data:
+            return jsonify({"error": "Missing 'topic' in request body"}), 400
+        
+        topic = data['topic'].strip()
+        if not topic:
+            return jsonify({"error": "Topic cannot be empty"}), 400
+        
+        if len(topic) > 100:
+            return jsonify({"error": "Topic too long (max 100 characters)"}), 400
+        
+        logger.info(f"🎓 Generating course for topic: {topic}")
+        
+        # Import and call the generator
+        from generator import generate_course
+        course_id = generate_course(topic, db, Course, Module, Lesson)
+        
+        return jsonify({
+            "course_id": course_id,
+            "message": "Course generated successfully!"
+        })
+        
+    except ValueError as e:
+        logger.error(f"Validation error: {e}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Course generation failed: {e}")
+        db.session.rollback()
+        return jsonify({"error": f"Failed to generate course: {str(e)}"}), 500
+
 
 def _seed_python_course():
     """Helper function to seed Python Mastery course data"""

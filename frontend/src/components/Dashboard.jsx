@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Play, Layout, Settings, Search, ChevronRight, GraduationCap, Video, CheckCircle, Clock, LogIn, LogOut } from 'lucide-react';
+import { BookOpen, Play, Layout, Settings, Search, ChevronRight, GraduationCap, Video, CheckCircle, Clock, LogIn, LogOut, Sparkles, Loader2 } from 'lucide-react';
 import VideoPlayer from './VideoPlayer';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -22,24 +22,30 @@ export default function Dashboard() {
     const [courses, setCourses] = useState([]);
     const [loadingCourses, setLoadingCourses] = useState(true);
 
-    useEffect(() => {
-        // Fetch Courses
+    // Course generation state
+    const [generateTopic, setGenerateTopic] = useState('');
+    const [generating, setGenerating] = useState(false);
+    const [generateError, setGenerateError] = useState(null);
+
+    const fetchCourses = () => {
         setLoadingCourses(true);
         fetch('/api/courses')
             .then(res => res.json())
             .then(data => {
-                // Add color mapping for UI since backend doesn't store it yet? Or just cycle colors.
-                // For now let's map known IDs or random colors
-                const colors = ['bg-yellow-500', 'bg-orange-600', 'bg-blue-600', 'bg-green-600', 'bg-purple-600'];
+                const colors = ['bg-yellow-500', 'bg-orange-600', 'bg-blue-600', 'bg-green-600', 'bg-purple-600', 'bg-pink-600', 'bg-cyan-600'];
                 const coursesWithUI = data.map((c, i) => ({
                     ...c,
                     color: colors[i % colors.length],
-                    name: c.title // Mapping title to name for existing UI
+                    name: c.title
                 }));
                 setCourses(coursesWithUI);
             })
             .catch(console.error)
             .finally(() => setLoadingCourses(false));
+    };
+
+    useEffect(() => {
+        fetchCourses();
 
         if (user) {
             fetch('/api/progress')
@@ -48,6 +54,37 @@ export default function Dashboard() {
                 .catch(console.error);
         }
     }, [user]);
+
+    const handleGenerateCourse = async () => {
+        if (!generateTopic.trim() || generating) return;
+
+        setGenerating(true);
+        setGenerateError(null);
+
+        try {
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic: generateTopic.trim() })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to generate course');
+            }
+
+            // Success! Clear input and reload courses
+            setGenerateTopic('');
+            fetchCourses();
+
+        } catch (error) {
+            console.error('Generation failed:', error);
+            setGenerateError(error.message);
+        } finally {
+            setGenerating(false);
+        }
+    };
 
     const handleCourseSelect = async (courseId) => {
         setSelectedLanguage(courseId);
@@ -148,6 +185,54 @@ export default function Dashboard() {
                                 <h1 className="text-3xl font-bold">Welcome back{user ? `, ${user.name.split(' ')[0]}` : '!'}</h1>
                                 <p className="text-gray-400 mt-1">Ready to continue learning?</p>
                             </div>
+                        </div>
+
+                        {/* AI Course Generation Section */}
+                        <div className="bg-gradient-to-r from-primary/20 to-purple-500/20 p-6 rounded-2xl border border-primary/30">
+                            <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
+                                <Sparkles className="w-5 h-5 text-primary" />
+                                What do you want to learn today?
+                            </h2>
+                            <p className="text-gray-400 text-sm mb-4">Enter any topic and our AI will create a personalized course for you!</p>
+
+                            <div className="flex gap-3">
+                                <input
+                                    type="text"
+                                    value={generateTopic}
+                                    onChange={(e) => setGenerateTopic(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleGenerateCourse()}
+                                    placeholder="e.g., Rust Programming, Machine Learning, Spanish for Beginners..."
+                                    className="flex-1 px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors"
+                                    disabled={generating}
+                                />
+                                <button
+                                    onClick={handleGenerateCourse}
+                                    disabled={!generateTopic.trim() || generating}
+                                    className="px-6 py-3 bg-primary hover:bg-primary/90 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl flex items-center gap-2 transition-all"
+                                >
+                                    {generating ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Generating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="w-5 h-5" />
+                                            Generate Course
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+
+                            {generateError && (
+                                <p className="mt-3 text-red-400 text-sm">{generateError}</p>
+                            )}
+
+                            {generating && (
+                                <p className="mt-3 text-gray-400 text-sm animate-pulse">
+                                    🔮 AI is crafting your personalized course... This may take a minute.
+                                </p>
+                            )}
                         </div>
 
                         {/* Recent Progress Section */}
