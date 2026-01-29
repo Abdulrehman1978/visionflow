@@ -368,6 +368,125 @@ def get_videos():
     
     return jsonify(scored_videos)
 
+def _seed_python_course():
+    """Helper function to seed Python Mastery course data"""
+    # Create Python Mastery course
+    python_course = Course(
+        id="python",
+        title="Python Mastery",
+        description="Master Python from scratch to advanced concepts.",
+        thumbnail_url="https://upload.wikimedia.org/wikipedia/commons/c/c3/Python-logo-notext.svg",
+        level="Beginner",
+        is_generated=False
+    )
+    db.session.add(python_course)
+    db.session.flush()
+    
+    # Module 1: Basics
+    module_basics = Module(
+        course_id="python",
+        title="Basics",
+        order_index=1
+    )
+    db.session.add(module_basics)
+    db.session.flush()
+    
+    basics_lessons = [
+        {"title": "Variables & Data Types", "video_id": "_uQrJ0TkZlc", "duration": "10:00"},
+        {"title": "Control Flow (If/Else)", "video_id": "Zp5MuPOtsSY", "duration": "12:30"},
+        {"title": "Loops (For/While)", "video_id": "6iF8Xb7Z3wQ", "duration": "15:00"}
+    ]
+    
+    for i, lesson_data in enumerate(basics_lessons):
+        lesson = Lesson(
+            module_id=module_basics.id,
+            title=lesson_data["title"],
+            video_url=lesson_data["video_id"],
+            duration=lesson_data["duration"],
+            order_index=i + 1
+        )
+        db.session.add(lesson)
+    
+    # Module 2: Data Structures
+    module_ds = Module(
+        course_id="python",
+        title="Data Structures",
+        order_index=2
+    )
+    db.session.add(module_ds)
+    db.session.flush()
+    
+    ds_lessons = [
+        {"title": "Lists & Tuples", "video_id": "ohCDkTuyIPg", "duration": "14:20"},
+        {"title": "Dictionaries & Sets", "video_id": "daefaLgNkw0", "duration": "11:45"}
+    ]
+    
+    for i, lesson_data in enumerate(ds_lessons):
+        lesson = Lesson(
+            module_id=module_ds.id,
+            title=lesson_data["title"],
+            video_url=lesson_data["video_id"],
+            duration=lesson_data["duration"],
+            order_index=i + 1
+        )
+        db.session.add(lesson)
+    
+    # Module 3: OOP
+    module_oop = Module(
+        course_id="python",
+        title="OOP",
+        order_index=3
+    )
+    db.session.add(module_oop)
+    db.session.flush()
+    
+    oop_lessons = [
+        {"title": "Classes & Objects", "video_id": "ZDa-Z5JzLYM", "duration": "18:00"},
+        {"title": "Inheritance & Polymorphism", "video_id": "JeznW_7DlB0", "duration": "16:10"}
+    ]
+    
+    for i, lesson_data in enumerate(oop_lessons):
+        lesson = Lesson(
+            module_id=module_oop.id,
+            title=lesson_data["title"],
+            video_url=lesson_data["video_id"],
+            duration=lesson_data["duration"],
+            order_index=i + 1
+        )
+        db.session.add(lesson)
+    
+    db.session.commit()
+
+@app.route('/api/reset_db', methods=['GET'])
+def reset_database():
+    """
+    WARNING: This route drops ALL tables and recreates them.
+    All users will be deleted and must log in again.
+    Use this to fix schema sync issues (e.g., missing 'level' column).
+    """
+    try:
+        logger.warning("⚠️ Resetting database - all data will be deleted!")
+        
+        # Drop all tables
+        db.drop_all()
+        
+        # Recreate tables with updated schema
+        db.create_all()
+        
+        # Seed with Python Mastery course
+        _seed_python_course()
+        
+        logger.info("✅ Database reset and seeded successfully")
+        return jsonify({
+            "message": "Database reset and seeded successfully. Please Log In again.",
+            "warning": "All user data has been deleted."
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Database reset failed: {e}")
+        return jsonify({"error": f"Reset failed: {str(e)}"}), 500
+
 @app.route('/api/seed_db', methods=['GET'])
 def seed_database():
     """Seed the database with Python Mastery course if it doesn't exist"""
@@ -378,92 +497,7 @@ def seed_database():
         if existing_course:
             return jsonify({"message": "Database already seeded. Python Mastery course exists."})
         
-        # Create Python Mastery course
-        python_course = Course(
-            id="python",
-            title="Python Mastery",
-            description="Master Python from scratch to advanced concepts.",
-            thumbnail_url="https://upload.wikimedia.org/wikipedia/commons/c/c3/Python-logo-notext.svg",
-            level="Beginner",
-            is_generated=False
-        )
-        db.session.add(python_course)
-        db.session.flush()
-        
-        # Module 1: Basics
-        module_basics = Module(
-            course_id="python",
-            title="Basics",
-            order_index=1
-        )
-        db.session.add(module_basics)
-        db.session.flush()
-        
-        basics_lessons = [
-            {"title": "Variables & Data Types", "video_id": "_uQrJ0TkZlc", "duration": "10:00"},
-            {"title": "Control Flow (If/Else)", "video_id": "Zp5MuPOtsSY", "duration": "12:30"},
-            {"title": "Loops (For/While)", "video_id": "6iF8Xb7Z3wQ", "duration": "15:00"}
-        ]
-        
-        for i, lesson_data in enumerate(basics_lessons):
-            lesson = Lesson(
-                module_id=module_basics.id,
-                title=lesson_data["title"],
-                video_url=lesson_data["video_id"],
-                duration=lesson_data["duration"],
-                order_index=i + 1
-            )
-            db.session.add(lesson)
-        
-        # Module 2: Data Structures
-        module_ds = Module(
-            course_id="python",
-            title="Data Structures",
-            order_index=2
-        )
-        db.session.add(module_ds)
-        db.session.flush()
-        
-        ds_lessons = [
-            {"title": "Lists & Tuples", "video_id": "ohCDkTuyIPg", "duration": "14:20"},
-            {"title": "Dictionaries & Sets", "video_id": "daefaLgNkw0", "duration": "11:45"}
-        ]
-        
-        for i, lesson_data in enumerate(ds_lessons):
-            lesson = Lesson(
-                module_id=module_ds.id,
-                title=lesson_data["title"],
-                video_url=lesson_data["video_id"],
-                duration=lesson_data["duration"],
-                order_index=i + 1
-            )
-            db.session.add(lesson)
-        
-        # Module 3: OOP
-        module_oop = Module(
-            course_id="python",
-            title="OOP",
-            order_index=3
-        )
-        db.session.add(module_oop)
-        db.session.flush()
-        
-        oop_lessons = [
-            {"title": "Classes & Objects", "video_id": "ZDa-Z5JzLYM", "duration": "18:00"},
-            {"title": "Inheritance & Polymorphism", "video_id": "JeznW_7DlB0", "duration": "16:10"}
-        ]
-        
-        for i, lesson_data in enumerate(oop_lessons):
-            lesson = Lesson(
-                module_id=module_oop.id,
-                title=lesson_data["title"],
-                video_url=lesson_data["video_id"],
-                duration=lesson_data["duration"],
-                order_index=i + 1
-            )
-            db.session.add(lesson)
-        
-        db.session.commit()
+        _seed_python_course()
         return jsonify({"message": "Database seeded successfully!"})
         
     except Exception as e:
