@@ -29,50 +29,59 @@ def generate_syllabus(topic_name: str) -> dict:
     """
     client = get_gemini_client()
     
-    prompt = f"""You are a Senior Curriculum Designer for a top-tier tech university. Create a rigorous, project-based syllabus for: '{topic_name}'.
+    # System Prompt - Senior Curriculum Designer
+    prompt = f"""You are a Senior Curriculum Designer for a top-tier tech university (MIT/Stanford standard).
+Your goal is to design a rigorous, project-based syllabus for: '{topic_name}'.
 
-Requirements:
-- Title: Catchy and professional course title
-- Description: Inspiring 2-3 sentence description outlining real-world skills students will gain
-- Level: Choose "Beginner", "Intermediate", or "Advanced" based on the topic
-- Modules: Create 4-6 distinct modules with clear progression (e.g., 'Foundations', 'Core Concepts', 'Advanced Patterns', 'Real-world Application', 'Best Practices')
-- Lessons: Each module MUST have 3-5 lessons with SPECIFIC, SEARCHABLE titles
+STRICT REQUIREMENTS:
 
-CRITICAL: Lesson titles must be specific YouTube search queries. Examples:
-✅ GOOD: "React useState hook complete tutorial", "Python list comprehension explained", "CSS Flexbox layout guide"
-❌ BAD: "Hooks", "Lists", "Layouts"
+1. Title: Professional and outcome-focused (e.g., "Advanced Backend Systems with Rust" instead of "Rust Course").
 
-Return ONLY valid JSON (no markdown, no code blocks, no extra text). Structure:
+2. Description: A compelling 2-sentence hook about what the user will build.
+
+3. Modules: Create exactly 4 modules.
+   - Module 1: Professional Foundations (No "Hello World", start with real concepts).
+   - Module 2: Core Architecture & Patterns.
+   - Module 3: Advanced Techniques & Optimization.
+   - Module 4: The Capstone Project (Real-world application).
+
+4. Lessons: Each module must have 3-4 lessons.
+
+CRITICAL: Lesson titles must be SEARCH OPTIMIZED for YouTube.
+   - Bad: "Variables"
+   - Good: "Rust memory management stack vs heap tutorial"
+
+OUTPUT FORMAT (JSON ONLY):
 {{
-    "title": "Professional Course Title",
-    "description": "Inspiring description of what students will learn and build",
+    "title": "...",
+    "description": "...",
     "level": "Beginner|Intermediate|Advanced",
     "modules": [
         {{
-            "title": "Module 1: Foundation Concepts",
-            "lessons": [
-                "Specific searchable lesson title 1",
-                "Specific searchable lesson title 2",
-                "Specific searchable lesson title 3"
-            ]
+            "title": "Module 1: Professional Foundations",
+            "lessons": ["search query 1", "search query 2", "search query 3"]
         }},
         {{
-            "title": "Module 2: Core Techniques",
-            "lessons": [
-                "Specific searchable lesson title 1",
-                "Specific searchable lesson title 2",
-                "Specific searchable lesson title 3",
-                "Specific searchable lesson title 4"
-            ]
+            "title": "Module 2: Core Architecture & Patterns",
+            "lessons": ["search query 1", "search query 2", "search query 3"]
+        }},
+        {{
+            "title": "Module 3: Advanced Techniques & Optimization",
+            "lessons": ["search query 1", "search query 2", "search query 3"]
+        }},
+        {{
+            "title": "Module 4: The Capstone Project",
+            "lessons": ["search query 1", "search query 2", "search query 3"]
         }}
     ]
 }}
 
-Make this a comprehensive, production-ready curriculum."""
+Return ONLY valid JSON. No markdown, no code blocks, no extra text."""
     
     try:
+        # Use Gemini 1.5 Flash for better rate limits
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-1.5-flash',
             contents=prompt
         )
         
@@ -89,9 +98,9 @@ Make this a comprehensive, production-ready curriculum."""
         if not all(key in syllabus for key in ['title', 'modules']):
             raise ValueError("Missing required fields in syllabus")
         
-        # Validate module and lesson counts
-        if len(syllabus['modules']) < 4 or len(syllabus['modules']) > 6:
-            logger.warning(f"Expected 4-6 modules, got {len(syllabus['modules'])}")
+        # Validate exactly 4 modules
+        if len(syllabus['modules']) != 4:
+            logger.warning(f"Expected exactly 4 modules, got {len(syllabus['modules'])}")
         
         return syllabus
         
