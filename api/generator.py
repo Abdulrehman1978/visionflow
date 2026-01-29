@@ -29,28 +29,46 @@ def generate_syllabus(topic_name: str) -> dict:
     """
     client = get_gemini_client()
     
-    prompt = f"""Create a structured online course for learning "{topic_name}".
-    
-Return ONLY valid JSON (no markdown, no code blocks). The structure must be:
+    prompt = f"""You are a Senior Curriculum Designer for a top-tier tech university. Create a rigorous, project-based syllabus for: '{topic_name}'.
+
+Requirements:
+- Title: Catchy and professional course title
+- Description: Inspiring 2-3 sentence description outlining real-world skills students will gain
+- Level: Choose "Beginner", "Intermediate", or "Advanced" based on the topic
+- Modules: Create 4-6 distinct modules with clear progression (e.g., 'Foundations', 'Core Concepts', 'Advanced Patterns', 'Real-world Application', 'Best Practices')
+- Lessons: Each module MUST have 3-5 lessons with SPECIFIC, SEARCHABLE titles
+
+CRITICAL: Lesson titles must be specific YouTube search queries. Examples:
+✅ GOOD: "React useState hook complete tutorial", "Python list comprehension explained", "CSS Flexbox layout guide"
+❌ BAD: "Hooks", "Lists", "Layouts"
+
+Return ONLY valid JSON (no markdown, no code blocks, no extra text). Structure:
 {{
-    "title": "Course Title",
-    "description": "A concise course description (1-2 sentences)",
-    "level": "Beginner" or "Intermediate" or "Advanced",
+    "title": "Professional Course Title",
+    "description": "Inspiring description of what students will learn and build",
+    "level": "Beginner|Intermediate|Advanced",
     "modules": [
         {{
-            "title": "Module Title",
-            "lessons": ["Lesson 1 title", "Lesson 2 title", "Lesson 3 title"]
+            "title": "Module 1: Foundation Concepts",
+            "lessons": [
+                "Specific searchable lesson title 1",
+                "Specific searchable lesson title 2",
+                "Specific searchable lesson title 3"
+            ]
+        }},
+        {{
+            "title": "Module 2: Core Techniques",
+            "lessons": [
+                "Specific searchable lesson title 1",
+                "Specific searchable lesson title 2",
+                "Specific searchable lesson title 3",
+                "Specific searchable lesson title 4"
+            ]
         }}
     ]
 }}
 
-Requirements:
-- Create exactly 3-4 modules
-- Each module should have 2-4 lessons
-- Lesson titles should be specific and searchable on YouTube
-- Module titles should be clear categories
-- Make lesson titles descriptive (e.g., "Variables and Data Types in Python" not just "Variables")
-"""
+Make this a comprehensive, production-ready curriculum."""
     
     try:
         response = client.models.generate_content(
@@ -70,6 +88,10 @@ Requirements:
         # Validate required fields
         if not all(key in syllabus for key in ['title', 'modules']):
             raise ValueError("Missing required fields in syllabus")
+        
+        # Validate module and lesson counts
+        if len(syllabus['modules']) < 4 or len(syllabus['modules']) > 6:
+            logger.warning(f"Expected 4-6 modules, got {len(syllabus['modules'])}")
         
         return syllabus
         

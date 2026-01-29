@@ -438,8 +438,12 @@ def generate_course_api():
         
         logger.info(f"🎓 Generating course for topic: {topic}")
         
-        # Import and call the generator
-        from generator import generate_course
+        # Import and call the generator (with fallback for Vercel)
+        try:
+            from generator import generate_course
+        except ImportError:
+            from .generator import generate_course
+            
         course_id = generate_course(topic, db, Course, Module, Lesson)
         
         return jsonify({
