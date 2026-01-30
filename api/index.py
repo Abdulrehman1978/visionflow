@@ -425,7 +425,12 @@ def generate_course_api():
     Response: { "course_id": "rust_programming", "message": "Course generated!" }
     """
     try:
-        data = request.json
+        # Validate request has JSON body
+        try:
+            data = request.json
+        except Exception:
+            return jsonify({"error": "Invalid JSON in request body"}), 400
+            
         if not data or 'topic' not in data:
             return jsonify({"error": "Missing 'topic' in request body"}), 400
         
@@ -452,12 +457,20 @@ def generate_course_api():
         })
         
     except ValueError as e:
+        # Handle validation errors (from generator)
         logger.error(f"Validation error: {e}")
         return jsonify({"error": str(e)}), 400
+        
     except Exception as e:
+        # Catch ALL other errors and return JSON
         error_str = str(e)
         logger.error(f"Course generation failed: {e}")
-        db.session.rollback()
+        
+        # Rollback database on any error
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         
         # Handle rate limit (429) or model not found (404) errors
         if "429" in error_str or "rate" in error_str.lower() or "quota" in error_str.lower():
@@ -465,7 +478,8 @@ def generate_course_api():
         elif "404" in error_str or "not found" in error_str.lower():
             return jsonify({"error": "AI is busy or cooling down. Please wait 30 seconds and try again."}), 503
         
-        return jsonify({"error": f"Failed to generate course: {str(e)}"}), 500
+        # Return generic error with actual error message
+        return jsonify({"error": str(e)}), 500
 
 
 def _seed_python_course():

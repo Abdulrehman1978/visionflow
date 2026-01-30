@@ -13,6 +13,20 @@ from youtubesearchpython import VideosSearch
 
 logger = logging.getLogger(__name__)
 
+def clean_json_string(text: str) -> str:
+    """
+    Clean AI response text to extract valid JSON.
+    Removes markdown code blocks and extra whitespace.
+    """
+    # Remove ```json from start
+    text = re.sub(r'^```json\s*', '', text, flags=re.IGNORECASE)
+    # Remove ``` from start (in case it's just ```)
+    text = re.sub(r'^```\s*', '', text)
+    # Remove ``` from end
+    text = re.sub(r'\s*```$', '', text)
+    # Strip whitespace
+    return text.strip()
+
 def get_gemini_client():
     """Initialize and return Gemini client"""
     api_key = os.getenv("GEMINI_API_KEY")
@@ -85,14 +99,20 @@ Return ONLY valid JSON. No markdown, no code blocks, no extra text."""
             contents=prompt
         )
         
-        # Clean the response - remove markdown code blocks if present
-        text = response.text.strip()
-        text = re.sub(r'^```json\s*', '', text)
-        text = re.sub(r'^```\s*', '', text)
-        text = re.sub(r'\s*```$', '', text)
-        text = text.strip()
+        # Get raw response text
+        raw_text = response.text
+        logger.info(f"Raw AI response (first 200 chars): {raw_text[:200]}")
         
-        syllabus = json.loads(text)
+        # Clean the response using helper function
+        cleaned_text = clean_json_string(raw_text)
+        
+        # Parse JSON
+        try:
+            syllabus = json.loads(cleaned_text)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing failed: {e}")
+            logger.error(f"Cleaned text: {cleaned_text[:500]}")
+            raise ValueError("AI returned invalid JSON structure")
         
         # Validate required fields
         if not all(key in syllabus for key in ['title', 'modules']):
@@ -104,13 +124,12 @@ Return ONLY valid JSON. No markdown, no code blocks, no extra text."""
         
         return syllabus
         
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse Gemini response as JSON: {e}")
-        logger.error(f"Raw response: {response.text[:500]}")
-        raise ValueError(f"Gemini returned invalid JSON: {e}")
+    except ValueError:
+        # Re-raise ValueError with clear message
+        raise
     except Exception as e:
         logger.error(f"Gemini API error: {e}")
-        raise
+        raise ValueError(f"AI service error: {str(e)}")
 
 def search_youtube_video(query: str) -> dict:
     """
