@@ -21,8 +21,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# ProxyFix for Vercel deployment (trust proxy headers)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key")
+
+# Secret Key Configuration
+app.secret_key = os.getenv("APP_SECRET_KEY", "dev_secret")
+
+# Session Cookie Security Configuration
+app.config['SESSION_COOKIE_NAME'] = 'google-login-session'
+app.config['SESSION_COOKIE_SECURE'] = True       # Required for Vercel HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True     # Prevent JS theft
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'    # Allow cookie in redirects (Critical for Mobile)
+
 CORS(app, supports_credentials=True) # Ensure credentials can be sent
 
 # --- DATABASE CONFIGURATION ---
@@ -169,8 +180,8 @@ def authorize():
             db.session.commit()
         
         login_user(user)
-        # Redirect to frontend dashboard
-        return redirect(os.getenv("FRONTEND_URL", "/dashboard"))
+        # Redirect to frontend dashboard (relative path for mobile compatibility)
+        return redirect('/dashboard')
     except Exception as e:
         logger.error(f"Auth failed: {e}")
         return jsonify({"error": str(e)}), 400
