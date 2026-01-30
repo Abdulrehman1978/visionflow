@@ -79,9 +79,9 @@ OUTPUT FORMAT (JSON ONLY):
 Return ONLY valid JSON. No markdown, no code blocks, no extra text."""
     
     try:
-        # Use Gemini 1.5 Flash for better rate limits
+        # Use stable gemini-pro model for Vercel compatibility
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-pro',
             contents=prompt
         )
         

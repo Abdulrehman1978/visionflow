@@ -259,9 +259,9 @@ def get_syllabus():
         if not client:
              raise Exception("Gemini Client not initialized")
 
-        # New API Call Syntax with gemini-1.5-flash
+        # New API Call Syntax with stable gemini-pro
         response = client.models.generate_content(
-            model='gemini-1.5-flash', 
+            model='gemini-pro', 
             contents=prompt
         )
         
@@ -455,8 +455,16 @@ def generate_course_api():
         logger.error(f"Validation error: {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
+        error_str = str(e)
         logger.error(f"Course generation failed: {e}")
         db.session.rollback()
+        
+        # Handle rate limit (429) or model not found (404) errors
+        if "429" in error_str or "rate" in error_str.lower() or "quota" in error_str.lower():
+            return jsonify({"error": "AI is busy or cooling down. Please wait 30 seconds and try again."}), 503
+        elif "404" in error_str or "not found" in error_str.lower():
+            return jsonify({"error": "AI is busy or cooling down. Please wait 30 seconds and try again."}), 503
+        
         return jsonify({"error": f"Failed to generate course: {str(e)}"}), 500
 
 
