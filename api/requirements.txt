@@ -3,5 +3,3 @@ Flask-SQLAlchemy
 psycopg2-binary
 Authlib
 requests
-google-generativeai
-youtube-search-python

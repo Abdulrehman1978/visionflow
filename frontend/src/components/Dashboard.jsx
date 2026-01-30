@@ -188,53 +188,11 @@ export default function Dashboard() {
                             </div>
                         </div>
 
-                        {/* AI Course Generation Section */}
+                        {/* AI Course Generation Temporarily Disabled */}{/* 
                         <div className="glass-panel p-6 rounded-2xl">
-                            <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
-                                <Sparkles className="w-5 h-5 text-primary" />
-                                What do you want to learn today?
-                            </h2>
-                            <p className="text-gray-400 text-sm mb-4">Enter any topic and our AI will create a personalized course for you!</p>
-
-                            <div className="flex gap-3">
-                                <input
-                                    type="text"
-                                    value={generateTopic}
-                                    onChange={(e) => setGenerateTopic(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleGenerateCourse()}
-                                    placeholder="e.g., Rust Programming, Machine Learning, Spanish for Beginners..."
-                                    className="flex-1 px-6 py-5 bg-gray-900/30 border border-white/10 rounded-full text-white text-lg placeholder-gray-500 focus:outline-none glow-input"
-                                    disabled={generating}
-                                />
-                                <button
-                                    onClick={handleGenerateCourse}
-                                    disabled={!generateTopic.trim() || generating}
-                                    className="px-6 py-3 bg-primary hover:bg-primary/90 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl flex items-center gap-2 transition-all"
-                                >
-                                    {generating ? (
-                                        <>
-                                            <Loader2 className="w-5 h-5 animate-spin" />
-                                            Generating...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="w-5 h-5" />
-                                            Generate Course
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-
-                            {generateError && (
-                                <p className="mt-3 text-red-400 text-sm">{generateError}</p>
-                            )}
-
-                            {generating && (
-                                <p className="mt-3 text-gray-400 text-sm animate-pulse">
-                                    🔮 AI is crafting your personalized course... This may take a minute.
-                                </p>
-                            )}
-                        </div>
+                             ... (Disabled for stability) ...
+                        </div> 
+                        */}
 
                         {/* Recent Progress Section */}
                         {user && completedTopics.length > 0 && (
