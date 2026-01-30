@@ -1,15 +1,14 @@
 """
 AI Course Generator Module
 
-Uses Google Gemini to generate course syllabus and YouTube to curate videos.
+Uses Google Gemini to generate course syllabus.
+LAZY IMPORTS: Heavy libraries are imported inside functions to prevent app startup crashes.
 """
 
 import os
 import json
 import logging
 import re
-from google import genai
-from youtubesearchpython import VideosSearch
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,10 @@ def clean_json_string(text: str) -> str:
     return text.strip()
 
 def get_gemini_client():
-    """Initialize and return Gemini client"""
+    """Initialize and return Gemini client (LAZY IMPORT)"""
+    # LAZY IMPORT: Prevents app crash if library fails to load
+    from google import genai
+    
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable not set")
@@ -130,45 +132,6 @@ Return ONLY valid JSON. No markdown, no code blocks, no extra text."""
     except Exception as e:
         logger.error(f"Gemini API error: {e}")
         raise ValueError(f"AI service error: {str(e)}")
-
-def search_youtube_video(query: str) -> dict:
-    """
-    Search YouTube for a video matching the query.
-    Returns video info dict with 'id', 'title', 'duration'.
-    
-    SAFE FAILOVER: If search fails (network timeout, IP blocking, etc.),
-    returns placeholder data instead of crashing.
-    """
-    try:
-        logger.info(f"🔍 Searching YouTube for: {query}")
-        search = VideosSearch(query + " tutorial", limit=1)
-        results = search.result()
-        
-        if not results or not results.get('result'):
-            logger.warning(f"No YouTube results for: {query}")
-            return {
-                'id': 'dQw4w9WgXcQ',
-                'title': 'Video unavailable (Click to search manually)',
-                'duration': '10:00'
-            }
-        
-        video = results['result'][0]
-        return {
-            'id': video.get('id', 'dQw4w9WgXcQ'),
-            'title': video.get('title', query),
-            'duration': video.get('duration', '10:00')
-        }
-        
-    except Exception as e:
-        # CRITICAL: Do NOT crash on YouTube search failure
-        # This prevents Vercel IP blocking or network timeouts from breaking course generation
-        logger.error(f"⚠️ YouTube search FAILED for '{query}': {e}")
-        logger.error(f"Returning placeholder video to prevent crash")
-        return {
-            'id': 'dQw4w9WgXcQ',
-            'title': 'Video unavailable (Click to search manually)',
-            'duration': '10:00'
-        }
 
 def generate_course(topic_name: str, db, Course, Module, Lesson) -> str:
     """

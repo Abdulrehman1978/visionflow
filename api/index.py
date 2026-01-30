@@ -1,9 +1,6 @@
 from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 import os
-from google import genai
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_search import YoutubeSearch
 import json
 import logging
 import time
@@ -12,10 +9,15 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from authlib.integrations.flask_client import OAuth
 from datetime import datetime
-from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-load_dotenv()
+# Optional: Load dotenv if available (not required on Vercel)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -136,14 +138,8 @@ MOCK_SYLLABUS = {
     ]
 }
 
-# 1. Setup Gemini (New Client)
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-client = None
-if GEMINI_API_KEY:
-    try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-    except Exception as e:
-        logger.error(f"Failed to initialize Gemini client: {e}")
+# NOTE: Gemini client is now initialized lazily inside generator.py
+# This prevents startup crashes if the library fails to load
 
 # --- AUTH ROUTES ---
 @app.route('/api/auth/login')
@@ -235,46 +231,13 @@ def get_progress():
 
 @app.route('/api/syllabus', methods=['GET'])
 def get_syllabus():
-    language = request.args.get('language', 'Python')
-    
-    # Smart Prompt for Syllabus
-    prompt = f"""
-    Create a structured learning syllabus for {language}.
-    Return ONLY valid JSON. Do not use Markdown blocks.
-    Structure:
-    {{
-        "title": "{language} Mastery",
-        "modules": [
-            {{
-                "title": "Module Title (e.g., Basics)",
-                "topics": [
-                    {{ "name": "Topic Name", "description": "Short explanation" }}
-                ]
-            }}
-        ]
-    }}
-    Include 3 modules: Basics, Intermediate, and Real-world Libraries.
     """
-    
-    try:
-        if not client:
-             raise Exception("Gemini Client not initialized")
-
-        # New API Call Syntax with stable gemini-pro
-        response = client.models.generate_content(
-            model='gemini-pro', 
-            contents=prompt
-        )
-        
-        # Clean response text
-        clean_text = response.text.replace('```json', '').replace('```', '').strip()
-        syllabus_data = json.loads(clean_text)
-        return jsonify(syllabus_data)
-
-    except Exception as e:
-        logger.warning(f"⚠️ API Error: {e}. Serving Mock Data.")
-        # Return Mock Data on ANY error (Rate Limit, Network, etc.)
-        return jsonify(MOCK_SYLLABUS)
+    Return syllabus for a language.
+    NOTE: AI generation moved to /api/generate endpoint.
+    This route now returns mock data for backwards compatibility.
+    """
+    # Return Mock Data (AI syllabus generation is via /api/generate now)
+    return jsonify(MOCK_SYLLABUS)
 
 @app.route('/api/courses', methods=['GET'])
 def get_courses():
@@ -401,19 +364,21 @@ def get_videos():
             "score": 10
         }])
 
-    # Fallback: Search YouTube (Legacy Logic)
+    # Fallback: Search YouTube (LAZY IMPORT to prevent startup crash)
     try:
-        results = YoutubeSearch(f"{topic} tutorial", max_results=3).to_dict()
-    except Exception as e:
-        return jsonify({"error": f"YouTube search failed: {str(e)}"}), 500
-    
-    # ... (rest of legacy logic could be here, or simplified)
-    scored_videos = [{
-            "id": v['id'],
-            "title": v['title'],
-            "thumbnail": v['thumbnails'][0],
+        from youtubesearchpython import VideosSearch
+        search = VideosSearch(f"{topic} tutorial", limit=3)
+        results = search.result().get('result', [])
+        scored_videos = [{
+            "id": v.get('id', ''),
+            "title": v.get('title', topic),
+            "thumbnail": f"https://img.youtube.com/vi/{v.get('id', '')}/mqdefault.jpg",
             "score": 5
         } for v in results]
+    except Exception as e:
+        logger.warning(f"YouTube search failed: {e}")
+        # Return empty list on failure instead of crashing
+        scored_videos = []
     
     return jsonify(scored_videos)
 
