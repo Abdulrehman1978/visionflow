@@ -7,6 +7,7 @@ from youtube_search import YoutubeSearch
 import json
 import logging
 import time
+import traceback
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from authlib.integrations.flask_client import OAuth
@@ -465,6 +466,7 @@ def generate_course_api():
         # Catch ALL other errors and return JSON
         error_str = str(e)
         logger.error(f"Course generation failed: {e}")
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
         
         # Rollback database on any error
         try:
@@ -474,12 +476,21 @@ def generate_course_api():
         
         # Handle rate limit (429) or model not found (404) errors
         if "429" in error_str or "rate" in error_str.lower() or "quota" in error_str.lower():
-            return jsonify({"error": "AI is busy or cooling down. Please wait 30 seconds and try again."}), 503
+            return jsonify({
+                "error": "AI is busy or cooling down. Please wait 30 seconds and try again.",
+                "trace": traceback.format_exc()
+            }), 503
         elif "404" in error_str or "not found" in error_str.lower():
-            return jsonify({"error": "AI is busy or cooling down. Please wait 30 seconds and try again."}), 503
+            return jsonify({
+                "error": "AI is busy or cooling down. Please wait 30 seconds and try again.",
+                "trace": traceback.format_exc()
+            }), 503
         
-        # Return generic error with actual error message
-        return jsonify({"error": str(e)}), 500
+        # Return error with full traceback for debugging
+        return jsonify({
+            "error": str(e),
+            "trace": traceback.format_exc()
+        }), 500
 
 
 def _seed_python_course():
