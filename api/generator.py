@@ -174,12 +174,12 @@ def generate_course(topic_name: str, db, Course, Module, Lesson) -> str:
     """
     Main function to generate a complete course.
     
-    LAZY LOADING ARCHITECTURE:
+    LAZY GENERATION ARCHITECTURE:
     1. Generate syllabus with Gemini AI (fast)
-    2. Use placeholder videos (no YouTube API calls)
+    2. Use placeholder videos (NO YouTube API calls) to prevent Vercel timeout
     3. Save to database
     
-    Video links are fetched client-side to avoid Vercel 10s timeout.
+    Video links are fetched client-side (or lazily updated later).
     
     Returns the course ID.
     """
@@ -196,7 +196,6 @@ def generate_course(topic_name: str, db, Course, Module, Lesson) -> str:
     # Check if course already exists
     existing = Course.query.filter_by(id=course_id).first()
     if existing:
-        # Add a random suffix to make it unique
         import random
         course_id = f"{course_id}_{random.randint(100, 999)}"
     
@@ -213,7 +212,7 @@ def generate_course(topic_name: str, db, Course, Module, Lesson) -> str:
     db.session.flush()
     
     # Step 3: Create Modules and Lessons with PLACEHOLDER videos
-    # LAZY LOADING: Real video links fetched client-side to avoid Vercel timeout
+    # CRITICAL: Do NOT search YouTube here. This ensures generation takes <3s.
     for module_idx, module_data in enumerate(syllabus['modules']):
         module = Module(
             course_id=course_id,
@@ -225,8 +224,8 @@ def generate_course(topic_name: str, db, Course, Module, Lesson) -> str:
         
         lessons = module_data.get('lessons', [])
         for lesson_idx, lesson_title in enumerate(lessons):
-            # PLACEHOLDER VIDEO - No YouTube API call (avoids timeout)
-            logger.info(f"  � Adding lesson: {lesson_title}")
+            # PLACEHOLDER VIDEO logic
+            logger.info(f"  ⚡ Adding lesson (lazy): {lesson_title}")
             
             lesson = Lesson(
                 module_id=module.id,
@@ -239,6 +238,6 @@ def generate_course(topic_name: str, db, Course, Module, Lesson) -> str:
     
     db.session.commit()
     logger.info(f"✅ Course '{syllabus['title']}' saved with ID: {course_id}")
-    logger.info(f"⚡ Fast generation complete (no YouTube API calls)")
+    logger.info(f"⚡ Lazy generation complete. No YouTube calls made.")
     
     return course_id
