@@ -6,7 +6,40 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    background: radial-gradient(circle at top left, #0f172a, #1e1a78, #0f172a);
+    @apply text-gray-100 antialiased min-h-screen;
+  }
+}
+
+@layer components {
+  .glass-card {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .glass-panel {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(to right, #60a5fa, #a855f7);
+  }
+
+  .glow-input {
+    @apply transition-all duration-300;
+    box-shadow: 0 0 15px rgba(96, 165, 250, 0.2);
+  }
+
+  .glow-input:focus {
+    box-shadow: 0 0 30px rgba(96, 165, 250, 0.4), 0 0 60px rgba(168, 85, 247, 0.2);
+    border-color: rgba(96, 165, 250, 0.6);
   }
 }
 

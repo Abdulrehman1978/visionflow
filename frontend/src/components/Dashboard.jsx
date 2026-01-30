@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, Play, Layout, Settings, Search, ChevronRight, GraduationCap, Video, CheckCircle, Clock, LogIn, LogOut, Sparkles, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import VideoPlayer from './VideoPlayer';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -132,14 +133,14 @@ export default function Dashboard() {
     if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
 
     return (
-        <div className="flex h-screen bg-background text-gray-100 overflow-hidden">
+        <div className="flex h-screen text-gray-100 overflow-hidden">
             {/* Sidebar */}
-            <aside className="w-64 bg-surface border-r border-gray-800 flex flex-col">
+            <aside className="w-64 glass-panel border-r border-white/10 flex flex-col">
                 <div className="p-6 flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                    <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-500 rounded-lg flex items-center justify-center shadow-lg shadow-primary/30">
                         <Video className="w-5 h-5 text-white" />
                     </div>
-                    <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400">
+                    <span className="text-xl font-bold gradient-text">
                         VisionFlow
                     </span>
                 </div>
@@ -182,13 +183,13 @@ export default function Dashboard() {
                     <div className="max-w-5xl mx-auto space-y-8">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h1 className="text-3xl font-bold">Welcome back{user ? `, ${user.name.split(' ')[0]}` : '!'}</h1>
-                                <p className="text-gray-400 mt-1">Ready to continue learning?</p>
+                                <h1 className="text-4xl md:text-5xl font-bold gradient-text">Welcome back{user ? `, ${user.name.split(' ')[0]}` : '!'}</h1>
+                                <p className="text-gray-400 mt-2 text-lg">Ready to continue learning?</p>
                             </div>
                         </div>
 
                         {/* AI Course Generation Section */}
-                        <div className="bg-gradient-to-r from-primary/20 to-purple-500/20 p-6 rounded-2xl border border-primary/30">
+                        <div className="glass-panel p-6 rounded-2xl">
                             <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
                                 <Sparkles className="w-5 h-5 text-primary" />
                                 What do you want to learn today?
@@ -202,7 +203,7 @@ export default function Dashboard() {
                                     onChange={(e) => setGenerateTopic(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleGenerateCourse()}
                                     placeholder="e.g., Rust Programming, Machine Learning, Spanish for Beginners..."
-                                    className="flex-1 px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors"
+                                    className="flex-1 px-6 py-5 bg-gray-900/30 border border-white/10 rounded-full text-white text-lg placeholder-gray-500 focus:outline-none glow-input"
                                     disabled={generating}
                                 />
                                 <button
@@ -262,26 +263,31 @@ export default function Dashboard() {
                                 </div>
                             ) : (
                                 courses.map((course) => (
-                                    <Link
+                                    <motion.div
                                         key={course.id}
-                                        to={`/course/${course.id}`}
-                                        className="bg-surface p-6 rounded-2xl border border-gray-800 hover:border-primary/50 transition-all cursor-pointer group block"
+                                        whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(102, 126, 234, 0.3)' }}
+                                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                                     >
-                                        <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-4 text-white font-bold text-xl", course.color)}>
-                                            {course.name[0]}
-                                        </div>
-                                        <h3 className="text-xl font-bold mb-1 group-hover:text-primary transition-colors">{course.name}</h3>
-                                        <p className="text-sm text-gray-400 mb-2">{course.description || `Master ${course.name} from scratch`}</p>
-                                        {course.level && (
-                                            <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded-full border border-primary/20 mb-3">
-                                                {course.level}
-                                            </span>
-                                        )}
-                                        <div className="flex items-center justify-between text-xs text-gray-400 mt-4">
-                                            <span>Start Learning</span>
-                                            <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                        </div>
-                                    </Link>
+                                        <Link
+                                            to={`/course/${course.id}`}
+                                            className="glass-card p-6 rounded-2xl cursor-pointer group block h-full"
+                                        >
+                                            <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-4 text-white font-bold text-xl shadow-lg", course.color)}>
+                                                {course.name[0]}
+                                            </div>
+                                            <h3 className="text-xl font-bold mb-1 group-hover:text-primary transition-colors">{course.name}</h3>
+                                            <p className="text-sm text-gray-400 mb-2">{course.description || `Master ${course.name} from scratch`}</p>
+                                            {course.level && (
+                                                <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded-full border border-primary/20 mb-3">
+                                                    {course.level}
+                                                </span>
+                                            )}
+                                            <div className="flex items-center justify-between text-xs text-gray-400 mt-4">
+                                                <span>Start Learning</span>
+                                                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                            </div>
+                                        </Link>
+                                    </motion.div>
                                 ))
                             )}
                         </div>

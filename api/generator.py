@@ -174,15 +174,18 @@ def generate_course(topic_name: str, db, Course, Module, Lesson) -> str:
     """
     Main function to generate a complete course.
     
-    1. Generate syllabus with Gemini
-    2. Find YouTube videos for each lesson
+    LAZY LOADING ARCHITECTURE:
+    1. Generate syllabus with Gemini AI (fast)
+    2. Use placeholder videos (no YouTube API calls)
     3. Save to database
+    
+    Video links are fetched client-side to avoid Vercel 10s timeout.
     
     Returns the course ID.
     """
     logger.info(f"🚀 Generating course for: {topic_name}")
     
-    # Step 1: Generate syllabus
+    # Step 1: Generate syllabus with Gemini
     syllabus = generate_syllabus(topic_name)
     logger.info(f"📚 Syllabus generated: {syllabus['title']}")
     
@@ -202,14 +205,15 @@ def generate_course(topic_name: str, db, Course, Module, Lesson) -> str:
         id=course_id,
         title=syllabus['title'],
         description=syllabus.get('description', f"Master {topic_name} from scratch"),
-        thumbnail_url=f"https://img.youtube.com/vi/placeholder/mqdefault.jpg",
+        thumbnail_url="https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
         level=syllabus.get('level', 'Beginner'),
         is_generated=True
     )
     db.session.add(course)
     db.session.flush()
     
-    # Step 3: Create Modules and Lessons
+    # Step 3: Create Modules and Lessons with PLACEHOLDER videos
+    # LAZY LOADING: Real video links fetched client-side to avoid Vercel timeout
     for module_idx, module_data in enumerate(syllabus['modules']):
         module = Module(
             course_id=course_id,
@@ -221,24 +225,20 @@ def generate_course(topic_name: str, db, Course, Module, Lesson) -> str:
         
         lessons = module_data.get('lessons', [])
         for lesson_idx, lesson_title in enumerate(lessons):
-            # Search for YouTube video
-            logger.info(f"  🔍 Searching video for: {lesson_title}")
-            video_info = search_youtube_video(lesson_title)
+            # PLACEHOLDER VIDEO - No YouTube API call (avoids timeout)
+            logger.info(f"  � Adding lesson: {lesson_title}")
             
             lesson = Lesson(
                 module_id=module.id,
                 title=lesson_title,
-                video_url=video_info['id'],
-                duration=video_info['duration'],
+                video_url="dQw4w9WgXcQ",  # Placeholder ID
+                duration="10:00",
                 order_index=lesson_idx + 1
             )
             db.session.add(lesson)
-            
-            # Update thumbnail to first video if not set
-            if module_idx == 0 and lesson_idx == 0:
-                course.thumbnail_url = f"https://img.youtube.com/vi/{video_info['id']}/mqdefault.jpg"
     
     db.session.commit()
     logger.info(f"✅ Course '{syllabus['title']}' saved with ID: {course_id}")
+    logger.info(f"⚡ Fast generation complete (no YouTube API calls)")
     
     return course_id
