@@ -36,7 +36,7 @@ class DirectCourseFactory:
             rprint("[bold red]❌ Error: POSTGRES_URL is missing from .env[/bold red]")
             exit(1)
 
-    def call_ai(self, prompt):
+    def call_ai(self, prompt, use_json_mode=True):
         """Calls Groq's Llama 3.3 model."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -45,9 +45,11 @@ class DirectCourseFactory:
         # Model Name
         data = {
             "model": "llama-3.3-70b-versatile", 
-            "messages": [{"role": "user", "content": prompt}],
-            "response_format": {"type": "json_object"} 
+            "messages": [{"role": "user", "content": prompt}]
         }
+        
+        if use_json_mode:
+            data["response_format"] = {"type": "json_object"}
         
         try:
             response = requests.post(self.api_url, headers=headers, json=data)
@@ -113,11 +115,59 @@ class DirectCourseFactory:
             rprint("[red]❌ AI returned bad JSON. Try again.[/red]")
             return None
 
+    def generate_quizzes(self, video_title):
+        """Generates 5 quizzes based on video title using Groq LLM."""
+        rprint(f"[yellow]  🧠 Generating Quizzes for {video_title}...[/yellow]")
+        
+        prompt = f"""
+Generate a JSON array of 5 multiple-choice questions based on the topic: "{video_title}".
+Each object must have: question, options (array of 4 strings), and correct_answer.
+
+Example format:
+{{
+    "quizzes": [
+        {{
+            "question": "What is Python?",
+            "options": ["A snake", "A programming language", "A framework", "A library"],
+            "correct_answer": "A programming language"
+        }}
+    ]
+}}
+
+Return ONLY valid JSON.
+        """
+        
+        json_text = self.call_ai(prompt, use_json_mode=True)
+        if not json_text:
+            rprint("[red]  ❌ Quiz generation failed[/red]")
+            return []
+        
+        try:
+            data = json.loads(json_text)
+            quizzes = data.get('quizzes', [])
+            if len(quizzes) < 5:
+                rprint(f"[yellow]  ⚠ Only generated {len(quizzes)} quizzes[/yellow]")
+            return quizzes[:5]  # Ensure max 5
+        except Exception as e:
+            rprint(f"[red]  ❌ Failed to parse quiz JSON: {e}[/red]")
+            return []
+
+    def course_exists(self, course_title, cursor):
+        """Check if a course already exists in the database."""
+        cursor.execute('SELECT id FROM "Course" WHERE title = %s', (course_title,))
+        return cursor.fetchone() is not None
+
     def upload_to_db(self, course_data):
         rprint("[cyan]💾 Connecting to Database...[/cyan]")
         try:
             conn = psycopg2.connect(self.postgres_url)
             cur = conn.cursor()
+            
+            # Check if course already exists
+            if self.course_exists(course_data['title'], cur):
+                rprint(f"[yellow]⚠ Course '{course_data['title']}' already exists. Skipping...[/yellow]")
+                conn.close()
+                return
             
             cur.execute("""
                 INSERT INTO "Course" (id, title, description, "thumbnailUrl", "createdAt", "updatedAt")
@@ -127,6 +177,8 @@ class DirectCourseFactory:
             course_id = cur.fetchone()[0]
             
             total_lessons = 0
+            total_quizzes = 0
+            
             for level in course_data['levels']:
                 rprint(f"  📂 Level: {level['level_name']}")
                 for topic in level['topics']:
@@ -144,22 +196,65 @@ class DirectCourseFactory:
                             v = videos[0]
                             cur.execute("""
                                 INSERT INTO "Lesson" (id, "moduleId", title, "videoUrl", duration, "thumbnailUrl", "createdAt", "updatedAt")
-                                VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, NOW(), NOW());
+                                VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, NOW(), NOW())
+                                RETURNING id;
                             """, (module_id, subtopic, v['link'], v['duration'], v['thumbnail']))
+                            lesson_id = cur.fetchone()[0]
                             total_lessons += 1
+                            
+                            # Generate and insert quizzes for this lesson
+                            quizzes = self.generate_quizzes(subtopic)
+                            for quiz in quizzes:
+                                try:
+                                    cur.execute("""
+                                        INSERT INTO "Quiz" ("lessonId", question, options, "correctAnswer", "createdAt", "updatedAt")
+                                        VALUES (%s, %s, %s, %s, NOW(), NOW());
+                                    """, (lesson_id, quiz['question'], json.dumps(quiz['options']), quiz['correct_answer']))
+                                    total_quizzes += 1
+                                except Exception as e:
+                                    rprint(f"[red]    ⚠ Failed to insert quiz: {e}[/red]")
+                            
                         rprint(f"    - Added lesson: {subtopic}")
 
             conn.commit()
             conn.close()
-            rprint(f"\n[bold green]✅ SUCCESS! Created course with {total_lessons} lessons.[/bold green]")
+            rprint(f"\n[bold green]✅ SUCCESS! Created course with {total_lessons} lessons and {total_quizzes} quizzes.[/bold green]")
             
         except Exception as e:
             rprint(f"[bold red]❌ Database Error: {e}[/bold red]")
 
 if __name__ == "__main__":
     factory = DirectCourseFactory()
-    topic = input("\nEnter course topic: ").strip()
-    if topic:
+    
+    # List of all courses to generate
+    courses = [
+        "Python", 
+        "Machine Learning", 
+        "Data Science", 
+        "HTML", 
+        "CSS", 
+        "Javascript", 
+        "React", 
+        "Node.js", 
+        "MERN Stack", 
+        "Python Libraries"
+    ]
+    
+    rprint(f"[bold cyan]🚀 Starting Course Library Generation ({len(courses)} courses)...[/bold cyan]\n")
+    
+    for idx, topic in enumerate(courses, 1):
+        rprint(f"\n[bold magenta]{'='*60}[/bold magenta]")
+        rprint(f"[bold magenta]Course {idx}/{len(courses)}: {topic}[/bold magenta]")
+        rprint(f"[bold magenta]{'='*60}[/bold magenta]\n")
+        
         roadmap = factory.generate_roadmap(topic)
         if roadmap:
             factory.upload_to_db(roadmap)
+        else:
+            rprint(f"[red]❌ Failed to generate roadmap for {topic}[/red]")
+        
+        # Small delay between courses to avoid rate limiting
+        if idx < len(courses):
+            time.sleep(2)
+    
+    rprint(f"\n[bold green]🎉 Course Library Generation Complete![/bold green]")
