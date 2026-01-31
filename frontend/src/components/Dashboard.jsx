@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Play, Layout, Settings, Search, ChevronRight, GraduationCap, Video, CheckCircle, Clock, LogIn, LogOut } from 'lucide-react';
-import VideoPlayer from './VideoPlayer';
+import LessonView from './LessonView';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,7 @@ export default function Dashboard() {
     const [selectedLanguage, setSelectedLanguage] = useState(null);
     const [syllabus, setSyllabus] = useState([]);
     const [selectedTopic, setSelectedTopic] = useState(null);
+    const [selectedLesson, setSelectedLesson] = useState(null);
     const [loadingSyllabus, setLoadingSyllabus] = useState(false);
     const [completedTopics, setCompletedTopics] = useState([]);
 
@@ -49,30 +50,27 @@ export default function Dashboard() {
         setSelectedLanguage(courseId);
         setSyllabus([]);
         setSelectedTopic(null);
+        setSelectedLesson(null);
         setActiveTab('lesson');
 
         setLoadingSyllabus(true);
         try {
-            // New Endpoint: /api/courses/<id>
             const response = await fetch('/api/courses/' + courseId);
             const data = await response.json();
 
-            // Transform backend structure to flat syllabus for now if that's what UI expects, 
-            // OR render modules properly.
-            // The existing UI expects `syllabus` to be an array of strings (topics).
-            // But we want to support modules now. 
-            // Let's flatten it for the sidebar list OR update sidebar to show modules.
-            // Task 4 says "Update Dashboard.jsx to fetch from /api/courses". 
-            // It didn't explicitly ask for Module UI redesign but "Returns full syllabus (Modules -> Lessons)".
-            // Let's try to flatten it to keep UI simple for now, but include module headers if possible?
-            // Actually, the previous implementation handled `data.modules` or `data.topics`.
-            // Let's assume we pass the modules object and update the rendering logic if needed.
-
             if (data.modules) {
-                // Flat list for the sidebar: Module 1 -> Topic A, Topic B...
-                // Let's just flatten all lessons for the simple sidebar we saw
-                const allTopics = data.modules.flatMap(m => m.topics.map(t => t.name));
-                setSyllabus(allTopics);
+                // Store full lesson objects with IDs
+                const allLessons = data.modules.flatMap(m =>
+                    m.topics.map(t => ({
+                        id: t.id,
+                        name: t.name,
+                        video_id: t.video_id,
+                        duration: t.duration,
+                        quiz_count: t.quiz_count || 0,
+                        practice_count: t.practice_count || 0
+                    }))
+                );
+                setSyllabus(allLessons);
             } else {
                 setSyllabus([]);
             }
@@ -84,8 +82,9 @@ export default function Dashboard() {
         }
     };
 
-    const handleTopicSelect = (topic) => {
-        setSelectedTopic(topic);
+    const handleTopicSelect = (lesson) => {
+        setSelectedTopic(lesson.name);
+        setSelectedLesson(lesson);
     };
 
     if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
@@ -197,26 +196,35 @@ export default function Dashboard() {
                                 {loadingSyllabus ? (
                                     <div className="text-center text-gray-400 py-10 animate-pulse">Generating syllabus...</div>
                                 ) : syllabus.length > 0 ? (
-                                    syllabus.map((topic, index) => {
-                                        const isCompleted = completedTopics.includes(topic);
+                                    syllabus.map((lesson, index) => {
+                                        const isCompleted = completedTopics.includes(lesson.name);
+                                        const isSelected = selectedLesson?.id === lesson.id;
                                         return (
                                             <div
-                                                key={index}
-                                                onClick={() => handleTopicSelect(topic)}
+                                                key={lesson.id || index}
+                                                onClick={() => handleTopicSelect(lesson)}
                                                 className={cn(
                                                     "p-4 rounded-xl border border-gray-800 cursor-pointer transition-all hover:bg-gray-800 relative pl-10",
-                                                    selectedTopic === topic ? "bg-primary/10 border-primary/50" : "bg-gray-900/40"
+                                                    isSelected ? "bg-primary/10 border-primary/50" : "bg-gray-900/40"
                                                 )}
                                             >
                                                 <div className={cn(
                                                     "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 flex items-center justify-center",
-                                                    isCompleted ? "border-green-500" : selectedTopic === topic ? "border-primary" : "border-gray-600"
+                                                    isCompleted ? "border-green-500" : isSelected ? "border-primary" : "border-gray-600"
                                                 )}>
-                                                    {isCompleted ? <div className="w-2 h-2 rounded-full bg-green-500" /> : selectedTopic === topic && <div className="w-2 h-2 rounded-full bg-primary" />}
+                                                    {isCompleted ? <div className="w-2 h-2 rounded-full bg-green-500" /> : isSelected && <div className="w-2 h-2 rounded-full bg-primary" />}
                                                 </div>
-                                                <p className={cn("text-sm font-medium", selectedTopic === topic ? "text-primary" : isCompleted ? "text-green-500" : "text-gray-300")}>
-                                                    {topic}
-                                                </p>
+                                                <div>
+                                                    <p className={cn("text-sm font-medium", isSelected ? "text-primary" : isCompleted ? "text-green-500" : "text-gray-300")}>
+                                                        {lesson.name}
+                                                    </p>
+                                                    {(lesson.quiz_count > 0 || lesson.practice_count > 0) && (
+                                                        <div className="flex gap-2 mt-1">
+                                                            {lesson.quiz_count > 0 && <span className="text-xs text-purple-400">📝 Quiz</span>}
+                                                            {lesson.practice_count > 0 && <span className="text-xs text-blue-400">💻 Practice</span>}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         )
                                     })
@@ -226,9 +234,13 @@ export default function Dashboard() {
                             </div>
                         </div>
 
-                        {/* Video Player & Content */}
+                        {/* Lesson View & Content */}
                         <div className="flex-1 bg-surface rounded-2xl border border-gray-800 overflow-hidden flex flex-col">
-                            <VideoPlayer topic={selectedTopic} onProgressUpdate={() => user && fetch('/api/progress').then(res => res.json()).then(setCompletedTopics)} />
+                            <LessonView
+                                lessonId={selectedLesson?.id}
+                                topic={selectedTopic}
+                                onProgressUpdate={() => user && fetch('/api/progress').then(res => res.json()).then(setCompletedTopics)}
+                            />
                         </div>
                     </div>
                 )}

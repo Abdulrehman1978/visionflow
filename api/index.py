@@ -13,15 +13,19 @@ from authlib.integrations.flask_client import OAuth
 from datetime import datetime
 from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
+from pathlib import Path
 
-load_dotenv()
+# Load .env from parent directory
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
+from flask_cors import CORS
+CORS(app, resources={r"/*": {"origins": "*"}})
 # ProxyFix for Vercel deployment (trust proxy headers)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
@@ -37,10 +41,17 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'    # Allow cookie in redirects (Cr
 CORS(app, supports_credentials=True) # Ensure credentials can be sent
 
 # --- DATABASE CONFIGURATION ---
-database_url = os.getenv("DATABASE_URL")
-if not database_url:
-    # Fallback to local SQLite
+# Get POSTGRES_URL from environment and fix the scheme if needed
+postgres_url = os.getenv("POSTGRES_URL")
+if postgres_url:
+    # Replace postgres:// with postgresql:// for SQLAlchemy compatibility
+    if postgres_url.startswith("postgres://"):
+        postgres_url = postgres_url.replace("postgres://", "postgresql://", 1)
+    database_url = postgres_url
+else:
+    # Fallback to local SQLite if POSTGRES_URL not found
     database_url = "sqlite:///visionflow.db"
+    logger.warning("POSTGRES_URL not found in .env, using SQLite fallback")
 
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -58,9 +69,12 @@ class User(UserMixin, db.Model):
 class UserProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    topic_id = db.Column(db.String(200), nullable=False) # e.g., "Python_Basics_Variables"
-    is_completed = db.Column(db.Boolean, default=False)
-    timestamp = db.Column(db.String(50), nullable=True) # Last watched timestamp in video
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=True)
+    topic_id = db.Column(db.String(200), nullable=True)  # Legacy support
+    video_completed = db.Column(db.Boolean, default=False)
+    quiz_completed = db.Column(db.Boolean, default=False)
+    is_completed = db.Column(db.Boolean, default=False)  # Overall completion
+    timestamp = db.Column(db.String(50), nullable=True)  # Last watched timestamp
     last_watched = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -88,6 +102,22 @@ class Lesson(db.Model):
     video_url = db.Column(db.String(200), nullable=False) # YouTube Video ID
     duration = db.Column(db.String(50), nullable=True) # e.g., "10:05"
     order_index = db.Column(db.Integer, nullable=False)
+
+class Quiz(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    question = db.Column(db.Text, nullable=False)
+    options = db.Column(db.JSON, nullable=False)  # ["Option A", "Option B", "Option C", "Option D"]
+    correct_answer = db.Column(db.String(100), nullable=False)
+    lesson = db.relationship('Lesson', backref=db.backref('quizzes', lazy=True))
+
+class PracticeQuestion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    problem_statement = db.Column(db.Text, nullable=False)
+    test_cases = db.Column(db.JSON, nullable=True)  # [{"input": "...", "expected": "..."}]
+    hints = db.Column(db.JSON, nullable=True)  # ["hint1", "hint2"]
+    lesson = db.relationship('Lesson', backref=db.backref('practice_questions', lazy=True))
 
 # Initialize DB
 with app.app_context():
@@ -187,7 +217,7 @@ def authorize():
         return jsonify({"error": str(e)}), 400
 
 @app.route('/api/auth/logout')
-@login_required
+#
 def logout():
     logout_user()
     return jsonify({"message": "Logged out successfully"})
@@ -205,7 +235,7 @@ def current_user_info():
 
 # --- PROGRESS ROUTES ---
 @app.route('/api/progress/update', methods=['POST'])
-@login_required
+#
 def update_progress():
     data = request.json
     topic_id = data.get('topic_id')
@@ -234,7 +264,7 @@ def update_progress():
     return jsonify({"message": "Progress updated"})
 
 @app.route('/api/progress', methods=['GET'])
-@login_required
+#
 def get_progress():
     # Return list of completed topic IDs
     completed_progress = UserProgress.query.filter_by(user_id=current_user.id, is_completed=True).all()
@@ -287,7 +317,7 @@ def get_syllabus():
 
 @app.route('/api/courses', methods=['GET'])
 def get_courses():
-    courses = Course.query.filter_by(is_generated=False).all() # Fetch pre-built courses
+    courses = Course.query.all()  # Fetch all courses from database
     return jsonify([{
         "id": c.id,
         "title": c.title,
@@ -314,19 +344,46 @@ def get_course_detail(course_id):
         lessons = sorted(module.lessons, key=lambda x: x.order_index)
         syllabus["modules"].append({
             "title": module.title,
-            "topics": [{ # Mapping 'lessons' to 'topics' to match frontend expectation or updating frontend? Plan says update frontend to structured syllabus.
+            "topics": [{
                 "id": l.id,
                 "name": l.title,
                 "video_id": l.video_url,
-                "duration": l.duration
+                "duration": l.duration,
+                "quiz_count": len(l.quizzes),
+                "practice_count": len(l.practice_questions)
             } for l in lessons]
         })
         
     return jsonify(syllabus)
 
+@app.route('/api/lessons/<int:lesson_id>', methods=['GET'])
+def get_lesson_detail(lesson_id):
+    """Get detailed lesson info including quizzes and practice questions"""
+    lesson = Lesson.query.get(lesson_id)
+    if not lesson:
+        return jsonify({"error": "Lesson not found"}), 404
+    
+    return jsonify({
+        "id": lesson.id,
+        "title": lesson.title,
+        "video_id": lesson.video_url,
+        "duration": lesson.duration,
+        "quizzes": [{
+            "id": q.id,
+            "question": q.question,
+            "options": q.options,
+            "correct_answer": q.correct_answer
+        } for q in lesson.quizzes],
+        "practice_questions": [{
+            "id": p.id,
+            "problem_statement": p.problem_statement,
+            "test_cases": p.test_cases,
+            "hints": p.hints
+        } for p in lesson.practice_questions]
+    })
 
 @app.route('/api/courses/<course_id>/progress', methods=['GET'])
-@login_required
+#
 def get_course_progress(course_id):
     # Get all lessons for this course
     # This is a bit complex efficiently in SQL, but let's do it simply first

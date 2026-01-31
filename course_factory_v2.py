@@ -8,11 +8,7 @@ import psycopg2
 from rich.console import Console
 from rich import print as rprint
 
-# --- ⚠️ PASTE YOUR GROQ KEY HERE ---
-# Get it from: https://console.groq.com/keys
-HARDCODED_API_KEY = os.getenv("GROQ_API_KEY")
-# -----------------------------------
-
+# 1. LOAD SECRETS FIRST
 load_dotenv()
 console = Console()
 
@@ -20,31 +16,37 @@ class DirectCourseFactory:
     """A robust factory using Groq (Fast & Free) to generate courses."""
 
     def __init__(self):
-        # 1. Check Key
-        if "gsk" not in HARDCODED_API_KEY:
-            rprint("[bold red]❌ Error: Please paste your Groq API Key (starts with 'gsk_') in the script![/bold red]")
-            exit(1)
+        # 2. Get Key from Environment (Safely)
+        self.api_key = os.getenv("GROQ_API_KEY")
+        
+        # Fallback: Check if user hardcoded it (for testing)
+        if not self.api_key or "gsk" not in self.api_key:
+             # Try getting Gemini if Groq is missing
+             self.api_key = os.getenv("GEMINI_API_KEY")
+             if not self.api_key:
+                rprint("[bold red]❌ Error: API Key not found![/bold red]")
+                rprint("Make sure your .env file has GROQ_API_KEY='gsk_...'")
+                exit(1)
             
-        self.api_key = HARDCODED_API_KEY
         self.api_url = "https://api.groq.com/openai/v1/chat/completions"
         
-        # 2. Database
+        # 3. Database
         self.postgres_url = os.getenv("POSTGRES_URL")
         if not self.postgres_url:
             rprint("[bold red]❌ Error: POSTGRES_URL is missing from .env[/bold red]")
             exit(1)
 
     def call_ai(self, prompt):
-        """Calls Groq's Llama 3 model."""
+        """Calls Groq's Llama 3.3 model."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        # OpenAI-compatible payload
+        # Model Name
         data = {
-            "model": "llama-3.3-70b-versatile",
+            "model": "llama-3.3-70b-versatile", 
             "messages": [{"role": "user", "content": prompt}],
-            "response_format": {"type": "json_object"} # Forces valid JSON
+            "response_format": {"type": "json_object"} 
         }
         
         try:
@@ -136,7 +138,6 @@ class DirectCourseFactory:
                     module_id = cur.fetchone()[0]
                     
                     for subtopic in topic['subtopics']:
-                        # Slight delay to avoid YouTube rate limits
                         time.sleep(1) 
                         videos = self.search_youtube(f"{subtopic} {course_data['title']} tutorial", limit=1)
                         if videos:

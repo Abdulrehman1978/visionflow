@@ -7,3 +7,6 @@ rich
 groq
 google-generativeai
 youtube-transcript-api
+flask-login
+flask-sqlalchemy
+authlib 
