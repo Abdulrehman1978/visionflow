@@ -1,11 +1,12 @@
-flask
+Flask
 flask-cors
+flask-sqlalchemy
+flask-login
+psycopg2-binary
+python-dotenv
+requests
 youtube-transcript-api
 google-genai
 youtube-search
-Flask-SQLAlchemy
-psycopg2-binary
 authlib
-flask-login
 gunicorn
-python-dotenv
