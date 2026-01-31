@@ -33,10 +33,16 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.getenv("APP_SECRET_KEY", "dev_secret")
 
 # Session Cookie Security Configuration
+# Session Cookie Security Configuration
+is_production = os.getenv("FLASK_ENV") == "production"
 app.config['SESSION_COOKIE_NAME'] = 'google-login-session'
-app.config['SESSION_COOKIE_SECURE'] = True       # Required for Vercel HTTPS
+app.config['SESSION_COOKIE_SECURE'] = is_production       # True for Prod, False for Dev
 app.config['SESSION_COOKIE_HTTPONLY'] = True     # Prevent JS theft
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'    # Allow cookie in redirects (Critical for Mobile)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'    # Allow cookie in redirects
+
+if not is_production:
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+    print("⚠️  Running in DEVELOPMENT mode: Secure cookies disabled & Insecure Transport enabled.")
 
 CORS(app, supports_credentials=True) # Ensure credentials can be sent
 
