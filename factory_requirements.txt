@@ -1,0 +1,5 @@
+google-generativeai
+youtube-search-python
+psycopg2-binary
+rich
+python-dotenv

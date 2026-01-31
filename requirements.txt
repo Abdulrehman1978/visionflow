@@ -1,0 +1,9 @@
+flask
+flask-cors
+psycopg2-binary
+python-dotenv
+requests
+rich
+groq
+google-generativeai
+youtube-transcript-api
